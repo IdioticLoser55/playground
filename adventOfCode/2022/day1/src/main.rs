@@ -1,7 +1,9 @@
 use advent_lib;
 use std::str::Split;
+use std::time::Instant;
 
 fn main() {
+    let now = Instant::now();
     let text = advent_lib::read_file(&String::from("day1/resources/input.txt"));
     let elves: Split<&str> = text.split("\n\n");
 
@@ -38,5 +40,6 @@ fn main() {
     
     let sum = calorie_count[max_count] + calorie_count[max2_count] + calorie_count[max3_count];
     
-    println!("{}", sum);
+    let elapsed = now.elapsed();
+    println!("Sum: {:}\nElapsed: {:.2?}", sum, elapsed);
 }
