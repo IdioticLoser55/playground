@@ -26,3 +26,7 @@ version = "0.1.0"
 dependencies = [
  "advent_lib",
 ]
+
+[[package]]
+name = "day4"
+version = "0.1.0"
