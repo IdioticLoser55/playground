@@ -1,7 +1,5 @@
 use std::{fs, time::Instant};
 
-const FLAG: u32 = 1u32 << 31;
-
 fn main() {
     let overall_timer = Instant::now();
     let mut timer = Instant::now();
