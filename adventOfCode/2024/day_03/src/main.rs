@@ -1,14 +1,19 @@
 use std::fs;
 use std::time;
 use regex::Regex;
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::u64 as nom_u64, combinator::map,
+    sequence::tuple, IResult,
+};
 
 fn main() {
     let file_path = "input.txt";
     let input = fs::read_to_string(file_path).unwrap();
 
     println!("Regex:\n{}\n", bench(&input, regex));
-    println!("Custom:\n{}\n", bench(&input, custom_parser));
     println!("Split:\n{}\n", bench(&input, split));
+    println!("Nom:\n{}\n", bench(&input, nom_nom));
+    println!("Custom:\n{}\n", bench(&input, custom_parser));
 }
 
 fn bench(input: &str, f: fn(&str) -> String) -> String {
@@ -17,6 +22,51 @@ fn bench(input: &str, f: fn(&str) -> String) -> String {
     println!("time used {:?}", time::Instant::now().duration_since(t0));
 
     ret
+}
+
+pub fn nom_nom(input: &str) -> String {
+    let mut p1 = 0;
+    let mut p2 = 0;
+    let mut enabled = true;
+    let mut input = input;
+
+    while !input.is_empty() {
+        let Ok((rem, parsed)) = parse_next(input) else {
+            input = &input[1..];
+            continue;
+        };
+        input = rem;
+        match parsed {
+            ParseResult::Do => enabled = true,
+            ParseResult::Dont => enabled = false,
+            ParseResult::Mul(a, b) => {
+                let sum = a * b;
+                p1 += sum;
+                if enabled {
+                    p2 += sum;
+                }
+            }
+        }
+    }
+
+    format!("Part 1: {p1}\nPart 2: {p2}")
+}
+
+enum ParseResult {
+    Do,
+    Dont,
+    Mul(u64, u64),
+}
+
+fn parse_next(s: &str) -> IResult<&str, ParseResult> {
+    alt((
+        map(tag("do()"), |_: &str| ParseResult::Do),
+        map(tag("don't()"), |_: &str| ParseResult::Dont),
+        map(
+            tuple((tag("mul("), nom_u64, tag(","), nom_u64, tag(")"))),
+            |(_, a, _, b, _)| ParseResult::Mul(a, b),
+        ),
+    ))(s)
 }
 
 
