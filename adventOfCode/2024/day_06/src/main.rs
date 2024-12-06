@@ -28,11 +28,13 @@ fn get_dir_val(dx: i32, dy: i32) -> u8 {
     }
 }
 
-
 fn my_mess(input: &str) -> String {
     let input = input.trim();
 
-    let lines = input.as_bytes().split(|&c| c == b'\n').collect::<Vec<&[u8]>>();
+    let lines = input
+        .as_bytes()
+        .split(|&c| c == b'\n')
+        .collect::<Vec<&[u8]>>();
 
     let width: i32 = lines[0].len().try_into().unwrap();
     let height: i32 = lines.len().try_into().unwrap();
@@ -41,7 +43,12 @@ fn my_mess(input: &str) -> String {
     let mut grid: Vec<u8> = Vec::with_capacity(usize::try_from(width * height).unwrap());
     lines.iter().for_each(|line| grid.extend_from_slice(line));
 
-    let position: i32 = grid.iter().position(|&c| c == b'^').unwrap().try_into().unwrap();
+    let position: i32 = grid
+        .iter()
+        .position(|&c| c == b'^')
+        .unwrap()
+        .try_into()
+        .unwrap();
     let (ix, iy): (i32, i32) = (position % width, position / width);
     let (mut px, mut py): (i32, i32) = (ix, iy);
 
@@ -71,26 +78,23 @@ fn my_mess(input: &str) -> String {
     }
     let visited = grid.iter().filter(|&&c| c == b'x').count();
 
-    let mut path = grid.clone();
-    path.fill(0);
-
     let possible_positions = grid
         .iter()
         .enumerate()
-        .filter_map(|(i, val)| 
+        .filter_map(|(i, val)| {
             if *val == b'x' && i != usize::try_from(position).unwrap() {
                 Some(i)
             } else {
                 None
-            })
+            }
+        })
         .collect::<Vec<usize>>();
-        
 
     let mut looping_count = 0;
     let mut path_grid = grid.clone();
     for p in possible_positions {
         grid[p] = b'#';
-        
+
         path_grid.fill(0);
 
         (px, py) = (ix, iy);
@@ -129,7 +133,5 @@ fn my_mess(input: &str) -> String {
         grid[p] = b'.';
     }
 
-
     format!("Part 1: {visited}\nPart 2: {looping_count}")
 }
-
