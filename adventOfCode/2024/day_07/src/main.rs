@@ -16,6 +16,7 @@ fn main() {
 
     println!("ME: \n{}\n", bench(&input, my_attempt));
     println!("Recursive: \n{}\n", bench(&input, recusive));
+    println!("Reverse: \n{}\n", bench(&input, reverse_recurse));
 }
 
 fn bench(input: &str, f: fn(&str) -> String) -> String {
@@ -24,6 +25,69 @@ fn bench(input: &str, f: fn(&str) -> String) -> String {
     println!("time used {:?}", time::Instant::now().duration_since(t0));
 
     ret
+}
+
+fn reverse_dfs(val: usize, operands: &[usize]) -> u8 {
+    match operands {
+        [] => panic!("Reached impossible condition: Empty operands slice"),
+        [last] => if *last == val {1} else {0},
+        [rest @ .., last] => {
+            /*
+            * Because we're working from the result down.
+            * If val is not a multiple of last, then last wasn't used to multiply.
+            */
+            let mut response;
+            if val % last == 0 {
+                response = reverse_dfs(val / last, rest);
+                if response & 1 > 0 {
+                    return response;
+                }
+            }
+
+            /*
+            * If last > val it will go past 0, so last wouldn't be used to add.
+            */
+            if val >= *last {
+                response = reverse_dfs(val - last, rest);
+                if response & 1 > 0 {
+                    return response;
+                }
+            }
+
+            /*
+            * Works out the mask,
+            * this is the number of places you have to shift by to concat.
+            * By taking mod we get the digits that would have been concatenated.
+            * Which should be equal to last.
+            */
+            let mask = 10_usize.pow(last.ilog10() + 1);
+            if val % mask == *last {
+                // We use 2 to indicate a concatenation has been applied.
+                return 2 | reverse_dfs(val / mask, rest);
+            }
+
+            // All other methods failed / not available.
+            return 0;
+        }
+    }
+}
+
+fn reverse_recurse(input: &str) -> String {
+    let parsed_lines = parse_input(&input);
+
+    let mut part1_count = 0;
+    let mut part2_count = 0;
+    for (result, equation_numbers) in parsed_lines {
+        let response = reverse_dfs(result, &equation_numbers);
+        if response == 3 {
+            part2_count += result;
+        } else if response == 1 {
+            part1_count += result;
+        }
+    }
+    part2_count += part1_count;
+
+    format!("Part 1: {part1_count}\nPart 2: {part2_count}")
 }
 
 fn single_dfs(nums: &[usize], prev: usize, res: usize) -> u8 {
@@ -50,6 +114,7 @@ fn single_dfs(nums: &[usize], prev: usize, res: usize) -> u8 {
     // 3 (2 & 1) means a sucessful concat.
     return 2 | single_dfs(&nums[1..], concat_nums(prev, nums[0]), res);
 }
+
 
 fn recusive(input: &str) -> String {
     let parsed_lines = parse_input(&input);
@@ -83,9 +148,9 @@ fn my_attempt(input: &str) -> String {
             .entry(num_required_ops)
             .or_insert_with_key(|&k| generate_combinations(k));
 
-        if part1_combs.iter().any(|comb| result == evaluate_equation(&equation_numbers, comb)) {
+        if part1_combs.iter().any(|comb| result == evaluate_equation(&equation_numbers, comb, result)) {
             part1_count += result;
-        } else if part2_combs.iter().any(|comb| result == evaluate_equation(&equation_numbers, comb)) {
+        } else if part2_combs.iter().any(|comb| result == evaluate_equation(&equation_numbers, comb, result)) {
             part2_count += result;
         }
     }
@@ -107,7 +172,7 @@ fn generate_combinations(k: usize) -> (Vec<Vec<Operations>>, Vec<Vec<Operations>
     (part1_combinations, part2_combinations)
 }
 
-fn evaluate_equation(numbers: &[usize], operations: &[Operations]) -> usize {
+fn evaluate_equation(numbers: &[usize], operations: &[Operations], result: usize) -> usize {
     let mut total = numbers[0];
     for (n, o) in numbers[1..].iter().zip(operations) {
         total = match o {
@@ -115,6 +180,9 @@ fn evaluate_equation(numbers: &[usize], operations: &[Operations]) -> usize {
             Operations::Add => total + n,
             Operations::Concat => concat_nums(total, *n),
         };
+        if total > result {
+            break;
+        }
     }
 
     total
