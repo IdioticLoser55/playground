@@ -14,7 +14,8 @@ fn main() {
     let file_path = "input.txt";
     let input = fs::read_to_string(file_path).unwrap();
 
-    println!("ME: {}", bench(&input, my_attempt));
+    println!("ME: \n{}\n", bench(&input, my_attempt));
+    println!("Recursive: \n{}\n", bench(&input, recusive));
 }
 
 fn bench(input: &str, f: fn(&str) -> String) -> String {
@@ -23,6 +24,50 @@ fn bench(input: &str, f: fn(&str) -> String) -> String {
     println!("time used {:?}", time::Instant::now().duration_since(t0));
 
     ret
+}
+
+fn single_dfs(nums: &[usize], prev: usize, res: usize) -> u8 {
+    if nums.is_empty() || prev > res {
+        if prev == res {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    let mut response;
+    response = single_dfs(&nums[1..], prev + nums[0], res);
+    if response & 1 > 0 {
+        return response;
+    }
+
+    response = single_dfs(&nums[1..], prev * nums[0], res);
+    if response & 1 > 0 {
+        return response;
+    }
+
+    // 2 marks a solution as including concat.
+    // 3 (2 & 1) means a sucessful concat.
+    return 2 | single_dfs(&nums[1..], concat_nums(prev, nums[0]), res);
+}
+
+fn recusive(input: &str) -> String {
+    let parsed_lines = parse_input(&input);
+
+    let mut part1_count = 0;
+    let mut part2_count = 0;
+    for (result, equation_numbers) in parsed_lines {
+        let response = single_dfs(&equation_numbers, 0, result);
+        if response == 3 {
+            part2_count += result;
+        } else if response == 1 {
+            part1_count += result;
+        }
+    }
+    part2_count += part1_count;
+
+
+    format!("Part 1: {part1_count}\nPart 2: {part2_count}")
 }
 
 fn my_attempt(input: &str) -> String {
@@ -65,14 +110,18 @@ fn generate_combinations(k: usize) -> (Vec<Vec<Operations>>, Vec<Vec<Operations>
 fn evaluate_equation(numbers: &[usize], operations: &[Operations]) -> usize {
     let mut total = numbers[0];
     for (n, o) in numbers[1..].iter().zip(operations) {
-        match o {
-            Operations::Mul => total *= n,
-            Operations::Add => total += n,
-            Operations::Concat => total = total * 10_usize.pow(n.checked_ilog10().unwrap_or(0) + 1) + n,
+        total = match o {
+            Operations::Mul => total * n,
+            Operations::Add => total + n,
+            Operations::Concat => concat_nums(total, *n),
         };
     }
 
     total
+}
+
+fn concat_nums(a: usize, b: usize) -> usize {
+    a * 10_usize.pow(b.checked_ilog10().unwrap_or(0) + 1) + b
 }
 
 fn parse_input(input: &str) -> impl Iterator<Item = (usize, Vec<usize>)> {
