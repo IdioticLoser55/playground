@@ -1,3 +1,5 @@
+#![feature(try_find)]
+
 use std::fs;
 use std::time;
 
@@ -93,9 +95,13 @@ fn my_mess(input: &str) -> String {
 
     for file_item in file_stack.iter().rev() {
         // println!("File Item: {:?}", file_item);
-        let Some(free_item) = free_stack
+        let Some(Some(free_item)) = free_stack
             .iter_mut()
-            .find(|free_item| free_item.size >= file_item.size && free_item.position < file_item.position)
+            .try_find(|free_item| if free_item.position >= file_item.position {
+                None
+            } else {
+                    Some(free_item.size >= file_item.size)
+            })
         else {
             continue;
         };
