@@ -3,6 +3,8 @@
 use std::fs;
 use std::time;
 
+const TRIANGLE: [usize; 10] = [0, 0, 1, 3, 6, 10, 15, 21, 28, 36];
+
 fn main() {
     let file_path = "input.txt";
     let input = fs::read_to_string(file_path).unwrap();
@@ -56,8 +58,8 @@ fn my_mess(input: &str) -> String {
         };
 
 
-        // Fib?
-        checksum += (file_item.position..file_item.position + file_item.size).fold(0, |acc, pos| acc + pos * file_item.file_id);
+        checksum += file_item.file_id * (file_item.position * file_item.size + TRIANGLE[file_item.size]);
+        // checksum += file_item.file_id * natural_sum_m_to_n(file_item.position, file_item.position + file_item.size - 1);
         // (current_position..current_position + file_item.size).for_each(|_| test.push(file_item.file_id.to_string()));
         // (current_position+file_item.size..current_position + file_item.size + free_item.size).for_each(|_| test.push(".".to_string()));
 
@@ -78,7 +80,8 @@ fn my_mess(input: &str) -> String {
         };
 
         // Fib?
-        checksum += (file_item.position..file_item.position + file_item.size).fold(0, |acc, pos| acc + pos * file_item.file_id);
+        checksum += file_item.file_id * (file_item.position * file_item.size + TRIANGLE[file_item.size]);
+        // checksum += file_item.file_id * natural_sum_m_to_n(file_item.position, file_item.position + file_item.size - 1);
         // (current_position..current_position + file_item.size).for_each(|_| test.push(file_item.file_id.to_string()));
 
         current_id += 1;
@@ -89,49 +92,12 @@ fn my_mess(input: &str) -> String {
 
     // println!("ICheck: {}, FILES: {:?}", checksum, test);
     let mut p2_checksum = checksum;
+
+    let mut free_stack_iter = free_stack.iter();
+    let mut file_stack_iter = file_stack.iter().rev();
     
-    let mut free_stack_iter = free_stack.clone();
-    let mut free_stack_iter = free_stack_iter.iter_mut();
-
-    for file_item in file_stack.iter().rev() {
-        // println!("File Item: {:?}", file_item);
-        let Some(Some(free_item)) = free_stack
-            .iter_mut()
-            .try_find(|free_item| if free_item.position >= file_item.position {
-                None
-            } else {
-                    Some(free_item.size >= file_item.size)
-            })
-        else {
-            continue;
-        };
-
-        // println!("Free Item: {:?}", free_item);
-        // println!("ICheck: {}, FILES: {:?}", p2_checksum, test);
-
-        p2_checksum -= (file_item.position .. file_item.position + file_item.size)
-            .fold(0, |acc, pos| acc + pos * file_item.file_id);
-
-        // (file_item.position .. file_item.position + file_item.size)
-        //     .for_each(|pos| test[pos] = ".".to_string());
-        // println!("Files Removed: Checksum: {}, Files: {:?}", p2_checksum, test);
-
-        p2_checksum += (free_item.position..free_item.position + file_item.size)
-            .fold(0, |acc, pos| acc + pos * file_item.file_id);
-
-        // (free_item.position..free_item.position + file_item.size)
-        //     .for_each(|pos| test[pos] = file_item.file_id.to_string());
-        // println!("Files Inserted: Checksum: {}, Files: {:?}", p2_checksum, test);
-
-        free_item.position += file_item.size;
-        free_item.size -= file_item.size;
-    }
-
-    // println!("HHMMM: {}", test.iter().enumerate().filter_map(|(i, s)| if s == "." { None } else {Some(i * s.parse::<usize>().unwrap())}).sum::<usize>());
-
-    let mut file_stack_iter = file_stack.iter_mut().rev();
-    let mut file_item: &mut FileItem = &mut FileItem{position: 0, file_id: 0, size: 0};
-    let mut free_item: &mut FreeItem = &mut FreeItem{position: 0, size: 0};
+    let mut file_item = FileItem{position: 0, file_id: 0, size: 0};
+    let mut free_item = FreeItem{position: 0, size: 0};
 
     loop {
         // Need to keep track of current position. Or will start adding start files to end files.
@@ -139,12 +105,12 @@ fn my_mess(input: &str) -> String {
 
         if free_item.size == 0 {
             let Some(x) = free_stack_iter.next() else {break};
-            free_item = x;
+            free_item = x.clone();
         }
 
         if file_item.size == 0 {
             let Some(x) = file_stack_iter.next() else {break};
-            file_item = x;
+            file_item = x.clone();
         }
 
         // println!("NEW ITEMS: free_item: {:?}, file_item: {:?}", free_item, file_item);
@@ -157,15 +123,25 @@ fn my_mess(input: &str) -> String {
         // println!("shift: {}", files_to_shift);
 
 
-        checksum -= (file_item.position + file_item.size - files_to_shift .. file_item.position + file_item.size)
-            .fold(0, |acc, pos| acc + pos * file_item.file_id);
+        checksum -= file_item.file_id * (file_item.position * files_to_shift + TRIANGLE[files_to_shift]);
+        // checksum -= file_item.file_id * natural_sum_m_to_n(
+        //     file_item.position + file_item.size - files_to_shift,
+        //     file_item.position + file_item.size - 1
+        // );
+        // checksum -= (file_item.position + file_item.size - files_to_shift .. file_item.position + file_item.size)
+        //     .fold(0, |acc, pos| acc + pos * file_item.file_id);
         // (file_item.position + file_item.size - files_to_shift .. file_item.position + file_item.size)
         //    .for_each(|pos| test[pos] = b'.');
 
         // println!("Files Removed: Checksum: {}, {:?}", checksum, String::from_utf8(test.to_vec()).unwrap());
 
-        checksum += (free_item.position..free_item.position + files_to_shift)
-            .fold(0, |acc, pos| acc + pos * file_item.file_id);
+        checksum += file_item.file_id * (free_item.position * files_to_shift + TRIANGLE[files_to_shift]);
+        // checksum += file_item.file_id * natural_sum_m_to_n(
+        //     free_item.position,
+        //     free_item.position + files_to_shift - 1
+        // );
+        // checksum += (free_item.position..free_item.position + files_to_shift)
+        //     .fold(0, |acc, pos| acc + pos * file_item.file_id);
         // (free_item.position..free_item.position + files_to_shift)
         //    .for_each(|pos| test[pos] = b'0' + u8::try_from(file_item.file_id).unwrap());
 
@@ -177,6 +153,51 @@ fn my_mess(input: &str) -> String {
         file_item.size -= files_to_shift;
     }
 
+    for file_item in file_stack.iter().rev() {
+        // println!("File Item: {:?}", file_item);
+        let Some(Some(free_item)) = free_stack
+            .iter_mut()
+            .try_find(|free_item| if free_item.position >= file_item.position {
+                None
+            } else {
+                Some(free_item.size >= file_item.size)
+            })
+        else {
+            continue;
+        };
+
+        // println!("Free Item: {:?}", free_item);
+        // println!("ICheck: {}, FILES: {:?}", p2_checksum, test);
+
+        p2_checksum -= file_item.file_id * (file_item.position * file_item.size + TRIANGLE[file_item.size]);
+        // p2_checksum -= file_item.file_id * natural_sum_m_to_n(
+        //     file_item.position,
+        //     file_item.position + file_item.size - 1
+        // );
+
+        // (file_item.position .. file_item.position + file_item.size)
+        //     .for_each(|pos| test[pos] = ".".to_string());
+        // println!("Files Removed: Checksum: {}, Files: {:?}", p2_checksum, test);
+
+        p2_checksum += file_item.file_id * (free_item.position * file_item.size + TRIANGLE[file_item.size]);
+        // p2_checksum += file_item.file_id * natural_sum_m_to_n(
+        //     free_item.position,
+        //     free_item.position + file_item.size - 1
+        // );
+        // p2_checksum += (free_item.position..free_item.position + file_item.size)
+        //     .fold(0, |acc, pos| acc + pos * file_item.file_id);
+
+        // (free_item.position..free_item.position + file_item.size)
+        //     .for_each(|pos| test[pos] = file_item.file_id.to_string());
+        // println!("Files Inserted: Checksum: {}, Files: {:?}", p2_checksum, test);
+
+        free_item.position += file_item.size;
+        free_item.size -= file_item.size;
+    }
+
+    // println!("HHMMM: {}", test.iter().enumerate().filter_map(|(i, s)| if s == "." { None } else {Some(i * s.parse::<usize>().unwrap())}).sum::<usize>());
+
+
     format!("Part 1: {checksum}\nPart 2: {p2_checksum}")
 }
 
@@ -185,6 +206,14 @@ fn parse_number(number: &[u8]) -> usize {
         .fold(0, |acc, digit| {
             acc * 10 + parse_digit(*digit)
         })
+}
+
+fn natural_sum_to_n(n: usize) -> usize {
+    n * (n + 1) / 2
+}
+
+fn natural_sum_m_to_n(m: usize, n: usize) -> usize {
+    (n * (n + 1) - (m - 1) * (m)) / 2
 }
 
 fn parse_digit(number: u8) -> usize {
