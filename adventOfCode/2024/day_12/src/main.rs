@@ -1,7 +1,6 @@
 use std::fs;
 use std::time;
 use std::ops::{Add, Sub};
-use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 struct Point {
@@ -84,108 +83,121 @@ fn me(input: &str) -> String {
     let mut visit_count: Vec<usize> = vec![0; grid.len()];
     let mut visited_from: Vec<u8> = vec![0; grid.len()];
 
+    // Breadth First Queue
     let mut bfs_queue = Vec::new();
     let mut region_indicies = Vec::new();
 
     let mut p1 = 0;
     let mut p2 = 0;
 
+    // loop through the entire grid.
     for (i, &plot) in grid.iter().enumerate() {
-        // println!("FOR: i: {i}, p: {plot}");
+        // Check that haven't been here already.
         if visit_count[i] > 0 {continue};
 
+
         let pos = Point::from_idx(i, &bounds);
-        // println!("POINT: {:?}", pos);
+
+        // push current pos to queue, with no dir_flag.
         bfs_queue.push((pos, 0));
         region_indicies.clear();
 
+        // loop until the queue is empty.
         while let Some((pos, dir_flag)) = bfs_queue.pop() {
-            // println!("Loop Pos: {:?}", pos);
-
             if !pos.is_within_bounds(&bounds) {
-                // println!("out of bounds");
                 continue;
             }
 
             let i = (pos.y * bounds.x + pos.x) as usize;
-            // println!("i: {i}");
+
+            // check if part of this region.
             if grid[i] != plot {
-                // println!("Not part of the region.");
                 continue;
             }
 
-
+            // count how many times visited. / How many neighbours in this region.
+            // 4 - neighbours = sides exposed.
             visit_count[i] += 1;
+            // keep track of the direction from which the neighbours came.
             visited_from[i] |= dir_flag;
+
+            // if already been visited then don't need to search neighbours.
             if visit_count[i] > 1 {
-                // println!("Already been");
                 continue;
             }
 
+            // add current to region.
             region_indicies.push(i);
+
+            // add neighbours to the queue to be searched.
             for (dir_idx, dir) in DIRS.iter().enumerate() {
                 bfs_queue.push((dir + &pos, 1 << dir_idx))
             }
             
-            // println!("Queue: {:?}", bfs_queue);
-            // println!("Visit_count: {:?}", visit_count);
         }
 
-        // account for initial. Non / self visit.
+        // Account for the initial visit from nowhere.
         visit_count[i] -= 1;
-        // println!("Visit_count: {:?}", visit_count);
 
+        // number of spaces visited in the region.
         let area = region_indicies.len();
+
+        // visit count keeps track of neighbours in the same region.
+        // 4 - neighbours = sides exposed.
+        // Sum exposed sides to get perimiter.
         let perimeter: usize = region_indicies
             .iter()
             .map(|&idx| 4 - visit_count[idx])
             .sum();
 
+        // Work back from perimeter to get sides.
         let mut sides = perimeter;
-        // const DIRS: [Point; 4] = [
-        //     Point{x: 1, y: 0},       1
-        //     Point{x: -1, y: 0},      2
-        //     Point{x: 0, y: 1},       4
-        //     Point{x: 0, y: -1},      8
-        // ];
+        // if area is 1 sides and perimeter are the same.
+        if area != 1 {
 
-        for (dir, dir_flags) in [(DIRS[0], 4 | 8), (DIRS[3], 1 | 2)] {
-            // println!("DIR: {:?}, flags: {:#06b}", dir, dir_flags);
-            for &i in region_indicies.as_slice() {
-                // println!("I: {i}, visited_from[i]: {:#06b}", visited_from[i]);
+            // search left to right, then top to bottom.
+            // Pass in the flags for the opposite directions.
+            // DIRS[0] = RIGHT VEC; 4 = DOWN FLAG; 8 = UP FLAG;
+            // DIRS[3] = DOWN VEC; 1 = RIGHT FLAG; 2 = LEFT FLAG;
+            for (dir, dir_flags) in [(DIRS[0], 4 | 8), (DIRS[3], 1 | 2)] {
+                // for each point in the region.
+                for &i in region_indicies.as_slice() {
+                    // checks to see if visited from the flag directions.
+                    if visited_from[i] & dir_flags == dir_flags {
+                        continue;
+                    }
 
-                if visited_from[i] & dir_flags == dir_flags {
-                    // println!("Already been visited from this dir.");
-                    continue;
+                    // works out the coordinates of the adjacent pos.
+                    let next_pos = &Point::from_idx(i, &bounds) + &dir;
+                    if !next_pos.is_within_bounds(&bounds) {
+                        continue;
+                    }
+
+                    // index of adjacent pos.
+                    let next_i = next_pos.to_idx(&bounds);
+                    // is index part of region.
+                    if !region_indicies.contains(&next_i) {
+                        continue;
+                    }
+
+                    // Or the two spaces. To find all the directions they were visited from.
+                    // Apply NOT. To get all the directions they weren't visited from.
+                    // Mask with dir_flags for the current directions being tested.
+                    // If neither side was visited from one of the directions being tested
+                    // then we can subtract 1 from sides/perimeter because they are adjacent.
+                    // Because dir_flags contains the two opposite directions,
+                    // we check both directions at the same time. And then count the number of ones
+                    // in the result.
+                    let bin_op = !(visited_from[i] | visited_from[next_i]) & dir_flags;
+                    sides -= (bin_op).count_ones() as usize;
                 }
 
-                let next_pos = &Point::from_idx(i, &bounds) + &dir;
-                if !next_pos.is_within_bounds(&bounds) {
-                    // println!("Not in bounds.");
-                    continue;
-                }
-
-                let next_i = next_pos.to_idx(&bounds);
-                // println!("Next i: {next_i}");
-                if !region_indicies.contains(&next_i) {
-                    // println!("Not in region");
-                    continue;
-                }
-
-                // println!("Sides: {sides}");
-                // println!("visited_from[i]:  {:#06b}", visited_from[i]);
-                // println!("visited_from[ni]: {:#06b}", visited_from[next_i]);
-                // println!("dir_flags:        {:#06b}", dir_flags);
-                let bin_op = !(visited_from[i] | visited_from[next_i]) & dir_flags;
-                // println!("bin operation:    {:#06b}", bin_op);
-                sides -= (bin_op).count_ones() as usize;
-                // println!("Sides: {sides}");
             }
         }
 
+
         p1 += area * perimeter;
         p2 += area * sides;
-        // println!("Visited From: {:?}", visited_from);
     }
 
     format!("Part 1: {p1}\nPart 2: {p2}")
