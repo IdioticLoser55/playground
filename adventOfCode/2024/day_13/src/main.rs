@@ -4,8 +4,8 @@ use std::ops::{Add, Sub};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Point {
-    x: f64,
-    y: f64,
+    x: i64,
+    y: i64,
 }
 
 impl Add for &Point {
@@ -50,7 +50,7 @@ fn my_attempt(input: &str) -> String {
 
     let mut p1 = 0;
     let mut p2 = 0;
-    let offset = Point{x: 10_000_000_000_000f64, y: 10_000_000_000_000f64};
+    let offset = Point{x: 10_000_000_000_000i64, y: 10_000_000_000_000i64};
     
     for chunk in lines.chunks(4) {
         let a = parse_line(chunk[0].as_bytes());
@@ -78,14 +78,35 @@ fn solve(a: &Point, b: &Point, p: &Point) -> Option<(usize, usize)> {
     // Don't walk through randomly. And instead try keep divisions to a minimum.
     //
     // Might have been easier to use Cramers method.
-    let a_solve = (p.x * b.y - p.y * b.x) / (a.x * b.y - a.y * b.x);
-    let b_solve = (a.x * p.y - a.y * p.x) / (a.x * b.y - a.y * b.x);
+    // let a_solve = (p.x * b.y - p.y * b.x) / (a.x * b.y - a.y * b.x);
+    // let b_solve = (a.x * p.y - a.y * p.x) / (a.x * b.y - a.y * b.x);
 
-    if a_solve.fract() == 0.0 && b_solve.fract() == 0.0 {
-        return Some((a_solve as usize, b_solve as usize));
-    } else {
+
+    // Because we only want integer solutions and we only have one div per equation.
+    // We can solve this without using float points.
+    // Solve the top and bottom of a without dividing.
+    // Then check top % bottom.
+    // If it's zero you have an integer solution.
+    // If not you have a fractional solution.
+    // Then repeat for b.
+    // And just take the division of the two parts.
+
+    let a_top = p.x * b.y - p.y * b.x;
+    let a_bottom = a.x * b.y - a.y * b.x;
+
+    if a_top % a_bottom != 0 {
         return None;
     }
+
+
+    let b_top = a.x * p.y - a.y * p.x;
+    let b_bottom = a.x * b.y - a.y * b.x;
+
+    if b_top % b_bottom != 0 {
+        return None;
+    }
+
+    return Some(((a_top / a_bottom) as usize, (b_top / b_bottom) as usize))
 }
 
 fn parse_line(line: &[u8]) -> Point {
@@ -94,7 +115,7 @@ fn parse_line(line: &[u8]) -> Point {
     let ys = line.len() - line.iter().rev().position(|&c| c == b'Y').unwrap() + 1;
     let y = line[ys..].iter().map_while(|&c| if c.is_ascii_digit() {Some(parse_digit(c))} else {None}).reduce(|acc, el| acc * 10 + el).unwrap();
 
-    Point{x: x as f64, y: y as f64}
+    Point{x: x as i64, y: y as i64}
 }
 
 fn parse_digit(number: u8) -> usize {
