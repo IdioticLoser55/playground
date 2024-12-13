@@ -1,6 +1,7 @@
 use std::fs;
 use std::time;
 use std::ops::{Add, Sub};
+use std::slice::Iter;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Point {
@@ -46,16 +47,21 @@ fn bench(input: &str, f: fn(&str) -> String) -> String {
 }
 
 fn my_attempt(input: &str) -> String {
-    let lines = input.trim().lines().collect::<Vec<_>>();
-
     let mut p1 = 0;
     let mut p2 = 0;
     let offset = Point{x: 10_000_000_000_000i64, y: 10_000_000_000_000i64};
-    
-    for chunk in lines.chunks(4) {
-        let a = parse_line(chunk[0].as_bytes());
-        let b = parse_line(chunk[1].as_bytes());
-        let p = parse_line(chunk[2].as_bytes());
+
+    let mut input_iter = input.as_bytes().iter();
+
+    loop {
+        let a = capture_next_point(&mut input_iter);
+        if a.is_none() {
+            break;
+        }
+        let a = a.unwrap();
+
+        let b = capture_next_point(&mut input_iter).unwrap();
+        let p = capture_next_point(&mut input_iter).unwrap();
 
         if let Some((a, b)) = solve(&a, &b, &p) {
             p1 += a * 3 + b;
@@ -64,12 +70,46 @@ fn my_attempt(input: &str) -> String {
         if let Some((a, b)) = solve(&a, &b, &(&p + &offset)) {
             p2 += a * 3 + b;
         }
-
-
-
     }
 
     format!("Part 1: {p1}\nPart 2: {p2}")
+}
+
+fn capture_next_point(input_iter: &mut Iter<u8>) -> Option<Point> {
+    if advance_to_target(input_iter, b'X').is_none() {
+        return None;
+    }
+    input_iter.next();
+    let x = extract_number(input_iter);
+
+    advance_to_target(input_iter, b'Y');
+    input_iter.next();
+    let y = extract_number(input_iter);
+
+    Some(Point{x: x as i64, y: y as i64})
+}
+
+fn advance_to_target(input_iter: &mut Iter<u8>, target: u8) -> Option<()> {
+    while let Some(char) = input_iter.next() {
+        if *char == target {
+            return Some(());
+        }
+    }
+
+    None
+}
+
+fn extract_number(input_iter: &mut Iter<u8>) -> usize {
+    let mut x = 0;
+    while let Some(char) = input_iter.next() {
+        if char.is_ascii_digit() {
+            x = x * 10 + parse_digit(*char);
+        } else {
+            break;
+        }
+    }
+
+    x
 }
 
 fn solve(a: &Point, b: &Point, p: &Point) -> Option<(usize, usize)> {
@@ -107,15 +147,6 @@ fn solve(a: &Point, b: &Point, p: &Point) -> Option<(usize, usize)> {
     }
 
     return Some(((a_top / a_bottom) as usize, (b_top / b_bottom) as usize))
-}
-
-fn parse_line(line: &[u8]) -> Point {
-    let xs = line.iter().position(|&c| c == b'X').unwrap() + 2;
-    let x = line[xs..].iter().map_while(|&c| if c.is_ascii_digit() {Some(parse_digit(c))} else {None}).reduce(|acc, el| acc * 10 + el).unwrap();
-    let ys = line.len() - line.iter().rev().position(|&c| c == b'Y').unwrap() + 1;
-    let y = line[ys..].iter().map_while(|&c| if c.is_ascii_digit() {Some(parse_digit(c))} else {None}).reduce(|acc, el| acc * 10 + el).unwrap();
-
-    Point{x: x as i64, y: y as i64}
 }
 
 fn parse_digit(number: u8) -> usize {
