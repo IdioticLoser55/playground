@@ -1,8 +1,7 @@
 use std::fs;
 use std::ops::{AddAssign, Mul};
 use std::time;
-use std::ops::{Add, Sub, MulAssign};
-use std::slice::Iter;
+use std::ops::{Add, Sub};
 
 const DIRS: [Point; 4] = [
     Point{x: 1, y: 0},
@@ -80,6 +79,7 @@ fn main() {
     let file_path = "input.txt";
     let input = fs::read_to_string(file_path).expect("FILE NOT FOUND");
 
+    println!("Better: \n{}\n", bench(&input, better));
     println!("Part 1: \n{}\n", bench(&input, part_1));
     println!("Part 2: \n{}\n", bench(&input, part_2));
 }
@@ -98,9 +98,181 @@ fn better(input: &str) -> String {
     let lines = map.split("\n").collect::<Vec<_>>();
     let bounds = Point{x: lines[0].len() as i64, y: lines.len() as i64};
 
+    let mut map = lines
+        .iter()
+        .flat_map(|line| {
+            line.as_bytes()
+        })
+        .copied()
+        .collect::<Vec<_>>();
 
+    let fat_bounds = 2 * &bounds;
+    let mut fat_map: Vec<u8> = Vec::with_capacity((fat_bounds.x * fat_bounds.y) as usize);
+    map
+        .iter()
+        .for_each(|c| match c {
+            b'#' => fat_map.extend(b"##"),
+            b'O' => fat_map.extend(b"[]"),
+            b'.' => fat_map.extend(b".."),
+            b'@' => fat_map.extend(b"@."),
+            _ => panic!(""),
+        });
 
-    "".to_string()
+    let mut pos = Point::from_idx(
+        map.iter().position(|c| *c == b'@').unwrap(),
+        &bounds);
+
+    let mut fat_pos = Point::from_idx(
+        fat_map.iter().position(|c| *c == b'@').unwrap(),
+        &fat_bounds);
+
+    let moves = moves
+        .lines()
+        .flat_map(|line| line.as_bytes())
+        .copied()
+        .collect::<Vec<_>>();
+
+    let mut try_push: Vec<Point> = Vec::new();
+    let mut to_push: Vec<(usize, u8)> = Vec::new();
+    let mut to_clear: Vec<usize> = Vec::new();
+
+    for m in moves {
+        // println!("\n{:?}", String::from_utf8(vec![m]));
+        // print_grid(&fat_map, fat_bounds.x);
+
+        let dir_idx = match m {
+            b'>' => 0,
+            b'<' => 1,
+            b'v' => 2,
+            b'^' => 3,
+            _ => panic!("ARGHHGHGHGHG"),
+        };
+
+        let dir = DIRS[dir_idx];
+
+        push_better(
+            &mut try_push,
+            &mut to_push,
+            &mut to_clear,
+            &mut map, 
+            &mut pos,
+            &dir,
+            &bounds
+        );
+
+        push_better(
+            &mut try_push,
+            &mut to_push,
+            &mut to_clear,
+            &mut fat_map, 
+            &mut fat_pos,
+            &dir,
+            &fat_bounds
+        );
+    }
+
+    // println!("\n");
+    // print_grid(&fat_map, fat_bounds.x);
+
+    let mut p1 = 0;
+    for (i, c) in map.iter().enumerate() {
+        if *c == b'O' {
+            let pos = Point::from_idx(i, &bounds);
+            let score = 100 * pos.y + pos.x;
+            // println!("i: {i}, Pos: {:?}, score: {score}", pos);
+            p1 += score;
+        }
+        
+    }
+
+    let mut p2 = 0;
+    for (i, c) in fat_map.iter().enumerate() {
+        if *c == b'[' {
+            let pos = Point::from_idx(i, &fat_bounds);
+            let score = 100 * pos.y + pos.x;
+            // println!("i: {i}, Pos: {:?}, score: {score}", pos);
+            p2 += score;
+        }
+        
+    }
+
+    format!("Part 1: {p1}\nPart 2: {p2}")
+}
+
+fn push_better(
+    try_push: &mut Vec<Point>,
+    to_push: &mut Vec<(usize, u8)>,
+    to_clear: &mut Vec<usize>,
+    map: &mut Vec<u8>,
+    pos: &mut Point,
+    dir: &Point,
+    bounds: &Point
+) {
+    try_push.push(pos.clone());
+    
+    while let Some(pos) = try_push.pop() {
+        let i = pos.to_idx(bounds);
+        // println!("i: {i}");
+    
+        match map[i] {
+            b'#' => {
+                try_push.clear();
+                to_push.clear();
+                to_clear.clear();
+                return;
+            },
+            b'.' => continue,
+            b'@' => {
+                let npos = &pos + dir;
+                to_clear.push(i);
+                to_push.push((npos.to_idx(bounds), b'@'));
+                try_push.push(npos);
+            },
+            b'O' => {
+                let npos = &pos + dir;
+                to_clear.push(i);
+                to_push.push((npos.to_idx(bounds), b'O'));
+                try_push.push(npos);
+            },
+            c if c == b'[' || c == b']' => {
+                if dir.x != 0 {
+                    let npos = &pos + dir;
+                    to_clear.push(i);
+                    to_push.push((npos.to_idx(bounds), c));
+                    try_push.push(npos);
+                } else {
+                    let (left, right);
+                    if c == b'[' {
+                        right = &pos + &DIRS[0];
+                        left = pos;
+                    } else {
+                        left = &pos + &DIRS[1];
+                        right = pos;
+                    }
+    
+                    let nl = &left + dir;
+                    let nr = &right + dir;
+    
+                    to_clear.push(left.to_idx(bounds));
+                    to_clear.push(right.to_idx(bounds));
+    
+                    to_push.push((nl.to_idx(bounds), b'['));
+                    to_push.push((nr.to_idx(bounds), b']'));
+    
+                    try_push.push(nl);
+                    try_push.push(nr);
+                }
+            },
+            _ => panic!("WHAT ARE YOU?"),
+        }
+    }
+    
+    to_clear.drain(..)
+        .for_each(|i| map[i] = b'.');
+    to_push.drain(..)
+        .for_each(|(i, c)| map[i] = c);
+    
+    *pos += dir;
 }
 
 fn part_2(input: &str) -> String {
@@ -216,7 +388,7 @@ fn push2(map: &mut Vec<u8>, pos: &Point, dir: &Point, bounds: &Point, test: bool
                     false
                 }
             } else {
-                let (mut left, mut right);
+                let (left, right);
                 if c == b'[' {
                     left = *pos;
                     right = pos + &DIRS[0];
