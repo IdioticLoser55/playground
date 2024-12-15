@@ -2,6 +2,7 @@ use std::fs;
 use std::ops::{AddAssign, Mul};
 use std::time;
 use std::ops::{Add, Sub};
+use std::collections::VecDeque;
 
 const DIRS: [Point; 4] = [
     Point{x: 1, y: 0},
@@ -132,9 +133,8 @@ fn better(input: &str) -> String {
         .copied()
         .collect::<Vec<_>>();
 
-    let mut try_push: Vec<Point> = Vec::new();
-    let mut to_push: Vec<(usize, u8)> = Vec::new();
-    let mut to_clear: Vec<usize> = Vec::new();
+    let mut try_push: VecDeque<Point> = VecDeque::new();
+    let mut to_push: Vec<Point> = Vec::new();
 
     for m in moves {
         // println!("\n{:?}", String::from_utf8(vec![m]));
@@ -153,7 +153,6 @@ fn better(input: &str) -> String {
         push_better(
             &mut try_push,
             &mut to_push,
-            &mut to_clear,
             &mut map, 
             &mut pos,
             &dir,
@@ -163,7 +162,6 @@ fn better(input: &str) -> String {
         push_better(
             &mut try_push,
             &mut to_push,
-            &mut to_clear,
             &mut fat_map, 
             &mut fat_pos,
             &dir,
@@ -200,17 +198,16 @@ fn better(input: &str) -> String {
 }
 
 fn push_better(
-    try_push: &mut Vec<Point>,
-    to_push: &mut Vec<(usize, u8)>,
-    to_clear: &mut Vec<usize>,
+    try_push: &mut VecDeque<Point>,
+    to_push: &mut Vec<Point>,
     map: &mut Vec<u8>,
     pos: &mut Point,
     dir: &Point,
     bounds: &Point
 ) {
-    try_push.push(pos.clone());
+    try_push.push_front(pos.clone());
     
-    while let Some(pos) = try_push.pop() {
+    while let Some(pos) = try_push.pop_front() {
         let i = pos.to_idx(bounds);
         // println!("i: {i}");
     
@@ -218,28 +215,21 @@ fn push_better(
             b'#' => {
                 try_push.clear();
                 to_push.clear();
-                to_clear.clear();
                 return;
             },
             b'.' => continue,
             b'@' => {
-                let npos = &pos + dir;
-                to_clear.push(i);
-                to_push.push((npos.to_idx(bounds), b'@'));
-                try_push.push(npos);
+                try_push.push_back(&pos + dir);
+                to_push.push(pos);
             },
             b'O' => {
-                let npos = &pos + dir;
-                to_clear.push(i);
-                to_push.push((npos.to_idx(bounds), b'O'));
-                try_push.push(npos);
+                try_push.push_back(&pos + dir);
+                to_push.push(pos);
             },
             c if c == b'[' || c == b']' => {
                 if dir.x != 0 {
-                    let npos = &pos + dir;
-                    to_clear.push(i);
-                    to_push.push((npos.to_idx(bounds), c));
-                    try_push.push(npos);
+                    try_push.push_back(&pos + dir);
+                    to_push.push(pos);
                 } else {
                     let (left, right);
                     if c == b'[' {
@@ -249,28 +239,30 @@ fn push_better(
                         left = &pos + &DIRS[1];
                         right = pos;
                     }
+
+                    if to_push.last().is_some_and(|p| *p == right) {
+                        continue;
+                    }
     
-                    let nl = &left + dir;
-                    let nr = &right + dir;
-    
-                    to_clear.push(left.to_idx(bounds));
-                    to_clear.push(right.to_idx(bounds));
-    
-                    to_push.push((nl.to_idx(bounds), b'['));
-                    to_push.push((nr.to_idx(bounds), b']'));
-    
-                    try_push.push(nl);
-                    try_push.push(nr);
+                    try_push.push_back(&left + dir);
+                    try_push.push_back(&right + dir);
+
+                    to_push.push(left);
+                    to_push.push(right);
                 }
             },
             _ => panic!("WHAT ARE YOU?"),
         }
     }
     
-    to_clear.drain(..)
-        .for_each(|i| map[i] = b'.');
     to_push.drain(..)
-        .for_each(|(i, c)| map[i] = c);
+        .rev()
+        .for_each(|p| {
+            let i = p.to_idx(bounds);
+            let ni = (&p + dir).to_idx(bounds);
+            map[ni] = map[i];
+            map[i] = b'.';
+        });
     
     *pos += dir;
 }
