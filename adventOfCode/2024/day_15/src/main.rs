@@ -80,9 +80,9 @@ fn main() {
     let file_path = "input.txt";
     let input = fs::read_to_string(file_path).expect("FILE NOT FOUND");
 
-    println!("Better: \n{}\n", bench(&input, better));
     println!("Part 1: \n{}\n", bench(&input, part_1));
     println!("Part 2: \n{}\n", bench(&input, part_2));
+    println!("Better: \n{}\n", bench(&input, better));
 }
 
 fn bench(input: &str, f: fn(&str) -> String) -> String {
@@ -98,6 +98,7 @@ fn better(input: &str) -> String {
 
     let lines = map.split("\n").collect::<Vec<_>>();
     let bounds = Point{x: lines[0].len() as i64, y: lines.len() as i64};
+
 
     let mut map = lines
         .iter()
@@ -122,22 +123,24 @@ fn better(input: &str) -> String {
     let mut pos = Point::from_idx(
         map.iter().position(|c| *c == b'@').unwrap(),
         &bounds);
+    // by getting rid of the robot symbol we don't have to keep track of it.
+    map[pos.to_idx(&bounds)] = b'.';
 
     let mut fat_pos = Point::from_idx(
         fat_map.iter().position(|c| *c == b'@').unwrap(),
         &fat_bounds);
+    fat_map[fat_pos.to_idx(&fat_bounds)] = b'.';
 
     let moves = moves
         .lines()
         .flat_map(|line| line.as_bytes())
-        .copied()
-        .collect::<Vec<_>>();
+        .copied();
 
     let mut try_push: VecDeque<Point> = VecDeque::new();
     let mut to_push: Vec<Point> = Vec::new();
 
     for m in moves {
-        // println!("\n{:?}", String::from_utf8(vec![m]));
+        // println!("\n{:?}, {:?}", String::from_utf8(vec![m]), fat_pos);
         // print_grid(&fat_map, fat_bounds.x);
 
         let dir_idx = match m {
@@ -150,16 +153,11 @@ fn better(input: &str) -> String {
 
         let dir = DIRS[dir_idx];
 
-        push_better(
-            &mut try_push,
-            &mut to_push,
-            &mut map, 
-            &mut pos,
-            &dir,
-            &bounds
-        );
+        // advance map.
+        part1_better(&mut map, &mut pos, &dir, &bounds);
 
-        push_better(
+        // advance fat map.
+        part2_better(
             &mut try_push,
             &mut to_push,
             &mut fat_map, 
@@ -172,6 +170,7 @@ fn better(input: &str) -> String {
     // println!("\n");
     // print_grid(&fat_map, fat_bounds.x);
 
+    // Find and work out scores of the boxes.
     let mut p1 = 0;
     for (i, c) in map.iter().enumerate() {
         if *c == b'O' {
@@ -197,7 +196,34 @@ fn better(input: &str) -> String {
     format!("Part 1: {p1}\nPart 2: {p2}")
 }
 
-fn push_better(
+fn part1_better(
+    map: &mut Vec<u8>,
+    pos: &mut Point,
+    dir: &Point,
+    bounds: &Point,
+) {
+    let dir_i = dir.to_idx(bounds);
+    let mut i = pos.to_idx(bounds);
+
+    i += dir_i;
+
+    if map[i] == b'.' {
+        *pos += dir;
+        return;
+    }
+
+    while map[i] != b'.' && map[i] != b'#' {
+        i += dir_i;
+    }
+
+    if map[i] == b'.' {
+        map[i] = b'O';
+        *pos += dir;
+        map[pos.to_idx(bounds)] = b'.';
+    }
+}
+
+fn part2_better(
     try_push: &mut VecDeque<Point>,
     to_push: &mut Vec<Point>,
     map: &mut Vec<u8>,
@@ -205,56 +231,91 @@ fn push_better(
     dir: &Point,
     bounds: &Point
 ) {
-    try_push.push_front(pos.clone());
+    if dir.x != 0 {
+        // If moving horizontal don't have to really deal with the two wide thing.
+        // So can skip some steps.
+        
+        let dir_i = dir.to_idx(bounds);
+        let mut i = pos.to_idx(bounds);
+
+        i += dir_i;
+        
+        while map[i] != b'.' && map[i] != b'#' {
+            i += dir_i;
+        }
+
+        if map[i] == b'#' {
+            return;
+        }
+
+        let a = pos.to_idx(bounds);
+        let b = i;
+
+        if dir.x > 0 {
+            map.copy_within(a..b, a + 1);
+            map[pos.to_idx(bounds)] = b'.';
+        } else {
+            map.copy_within(b + 1..a + 1, b);
+            map[pos.to_idx(bounds)] = b'.';
+        }
+
+        *pos += dir;
+        return;
+    }
+
+    // init with the robots position.
+    try_push.push_front(pos.add(dir));
+
     
+    // get the next position to try and check it.
     while let Some(pos) = try_push.pop_front() {
         let i = pos.to_idx(bounds);
         // println!("i: {i}");
     
         match map[i] {
+            // hit a wall.
+            // Can't advance so return with no change.
             b'#' => {
+                // reset lists.
                 try_push.clear();
                 to_push.clear();
                 return;
             },
+            // empty space, nothing further to check here.
             b'.' => continue,
+            // robots position.
             b'@' => {
                 try_push.push_back(&pos + dir);
                 to_push.push(pos);
             },
-            b'O' => {
-                try_push.push_back(&pos + dir);
-                to_push.push(pos);
-            },
             c if c == b'[' || c == b']' => {
-                if dir.x != 0 {
-                    try_push.push_back(&pos + dir);
-                    to_push.push(pos);
+                // get the left and right components of the box.
+                let (left, right);
+                if c == b'[' {
+                    right = &pos + &DIRS[0];
+                    left = pos;
                 } else {
-                    let (left, right);
-                    if c == b'[' {
-                        right = &pos + &DIRS[0];
-                        left = pos;
-                    } else {
-                        left = &pos + &DIRS[1];
-                        right = pos;
-                    }
-
-                    if to_push.last().is_some_and(|p| *p == right) {
-                        continue;
-                    }
-    
-                    try_push.push_back(&left + dir);
-                    try_push.push_back(&right + dir);
-
-                    to_push.push(left);
-                    to_push.push(right);
+                    left = &pos + &DIRS[1];
+                    right = pos;
                 }
+
+                // check to see if this box has already been handled.
+                if to_push.last().is_some_and(|p| *p == right) {
+                    continue;
+                }
+    
+                try_push.push_back(&left + dir);
+                try_push.push_back(&right + dir);
+
+                to_push.push(left);
+                to_push.push(right);
             },
             _ => panic!("WHAT ARE YOU?"),
         }
     }
     
+    // advance each element in reverse order.
+    // from the empty space back to the robot.
     to_push.drain(..)
         .rev()
         .for_each(|p| {
@@ -273,7 +334,7 @@ fn part_2(input: &str) -> String {
     let lines = map.split("\n").collect::<Vec<_>>();
     let bounds = Point{x: lines[0].len() as i64, y: lines.len() as i64};
 
-    let map = lines
+    let mut map = lines
         .iter()
         .flat_map(|line| {
             line.as_bytes()
@@ -281,7 +342,7 @@ fn part_2(input: &str) -> String {
         .copied()
         .collect::<Vec<_>>();
 
-    let mut map = map
+    let mut fat_map = map.clone()
         .into_iter()
         .flat_map(|c| match c {
             b'#' => b"##",
@@ -293,11 +354,16 @@ fn part_2(input: &str) -> String {
         .copied()
         .collect::<Vec<_>>();
 
-    let bounds = 2 * &bounds;
+    let fat_bounds = 2 * &bounds;
 
-    let mut robot_pos = Point::from_idx(
+    let mut pos = Point::from_idx(
         map.iter().position(|c| *c == b'@').unwrap(),
         &bounds
+    );
+
+    let mut fat_pos = Point::from_idx(
+        fat_map.iter().position(|c| *c == b'@').unwrap(),
+        &fat_bounds
     );
 
     let moves = moves
@@ -320,21 +386,41 @@ fn part_2(input: &str) -> String {
         };
 
         let dir = DIRS[dir_idx];
-        let npos = &robot_pos + &dir;
+        let npos = &fat_pos + &dir;
+
+        let ni = npos.to_idx(&fat_bounds);
+        match fat_map[ni] {
+            b'#' => {},
+            b'.' => {
+                fat_map[fat_pos.to_idx(&fat_bounds)] = b'.';
+                fat_pos = npos;
+                fat_map[ni] = b'@';
+            }
+            c if c == b'[' || c == b']' => {
+                if push2(&mut fat_map, &npos, &dir, &fat_bounds, true) {
+                    push2(&mut fat_map, &npos, &dir, &fat_bounds, false);
+                    fat_map[fat_pos.to_idx(&fat_bounds)] = b'.';
+                    fat_pos = npos;
+                    fat_map[ni] = b'@';
+                }
+            }
+            _ => panic!("WHAT ARE YOU! {:?}", String::from_utf8(fat_map[ni..ni+1].to_vec())),
+        }
+
+        let npos = &pos + &dir;
 
         let ni = npos.to_idx(&bounds);
         match map[ni] {
-            b'#' => continue,
+            b'#' => {},
             b'.' => {
-                map[robot_pos.to_idx(&bounds)] = b'.';
-                robot_pos = npos;
+                map[pos.to_idx(&bounds)] = b'.';
+                pos = npos;
                 map[ni] = b'@';
             }
-            c if c == b'[' || c == b']' => {
-                if push2(&mut map, &npos, &dir, &bounds, true) {
-                    push2(&mut map, &npos, &dir, &bounds, false);
-                    map[robot_pos.to_idx(&bounds)] = b'.';
-                    robot_pos = npos;
+            b'O' => {
+                if push(&mut map, &npos, &dir, &bounds) {
+                    map[pos.to_idx(&bounds)] = b'.';
+                    pos = npos;
                     map[ni] = b'@';
                 }
             }
@@ -345,18 +431,32 @@ fn part_2(input: &str) -> String {
     // print_grid(&map, bounds.x);
     // println!("\n");
 
-    let mut count = 0;
-    for (i, c) in map.iter().enumerate() {
+    let mut p2 = 0;
+    for (i, c) in fat_map.iter().enumerate() {
         if *c == b'[' {
-            let pos = Point::from_idx(i, &bounds);
+            let pos = Point::from_idx(i, &fat_bounds);
             let score = 100 * pos.y + pos.x;
             // println!("i: {i}, Pos: {:?}, score: {score}", pos);
-            count += score;
+            p2 += score;
         }
         
     }
 
-    format!("Part 2: {count}")
+    // print_grid(&map, bounds.x);
+    // println!("\n");
+
+    let mut p1 = 0;
+    for (i, c) in map.iter().enumerate() {
+        if *c == b'O' {
+            let pos = Point::from_idx(i, &bounds);
+            let score = 100 * pos.y + pos.x;
+            // println!("i: {i}, Pos: {:?}, score: {score}", pos);
+            p1 += score;
+        }
+        
+    }
+
+    format!("Part 1: {p1}\nPart 2: {p2}")
 }
 
 fn push2(map: &mut Vec<u8>, pos: &Point, dir: &Point, bounds: &Point, test: bool) -> bool {
