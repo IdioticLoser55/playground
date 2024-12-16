@@ -120,41 +120,35 @@ fn better(input: &str) -> String {
             _ => panic!(""),
         });
 
-    let mut pos = Point::from_idx(
-        map.iter().position(|c| *c == b'@').unwrap(),
-        &bounds);
+    let mut pos = map.iter().position(|c| *c == b'@').unwrap() as i64;
     // by getting rid of the robot symbol we don't have to keep track of it.
-    map[pos.to_idx(&bounds)] = b'.';
+    map[pos as usize] = b'.';
 
-    let mut fat_pos = Point::from_idx(
-        fat_map.iter().position(|c| *c == b'@').unwrap(),
-        &fat_bounds);
-    fat_map[fat_pos.to_idx(&fat_bounds)] = b'.';
+    let mut fat_pos = fat_map.iter().position(|c| *c == b'@').unwrap() as i64;
+    fat_map[fat_pos as usize] = b'.';
 
     let moves = moves
         .lines()
         .flat_map(|line| line.as_bytes())
         .copied();
 
-    let mut try_push: VecDeque<Point> = VecDeque::new();
-    let mut to_push: Vec<Point> = Vec::new();
+    let mut try_push: VecDeque<i64> = VecDeque::new();
+    let mut to_push: Vec<i64> = Vec::new();
 
     for m in moves {
         // println!("\n{:?}, {:?}", String::from_utf8(vec![m]), fat_pos);
         // print_grid(&fat_map, fat_bounds.x);
 
-        let dir_idx = match m {
-            b'>' => 0,
-            b'<' => 1,
-            b'v' => 2,
-            b'^' => 3,
+        let (dir, fat_dir) = match m {
+            b'>' => (1, 1),
+            b'<' => (-1, -1),
+            b'v' => (bounds.x, fat_bounds.x),
+            b'^' => (-bounds.x, -fat_bounds.x),
             _ => panic!("ARGHHGHGHGHG"),
         };
 
-        let dir = DIRS[dir_idx];
-
         // advance map.
-        part1_better(&mut map, &mut pos, &dir, &bounds);
+        part1_better(&mut map, &mut pos, dir);
 
         // advance fat map.
         part2_better(
@@ -162,8 +156,7 @@ fn better(input: &str) -> String {
             &mut to_push,
             &mut fat_map, 
             &mut fat_pos,
-            &dir,
-            &fat_bounds
+            fat_dir,
         );
     }
 
@@ -198,65 +191,56 @@ fn better(input: &str) -> String {
 
 fn part1_better(
     map: &mut Vec<u8>,
-    pos: &mut Point,
-    dir: &Point,
-    bounds: &Point,
+    pos: &mut i64,
+    dir: i64,
 ) {
-    let dir_i = dir.to_idx(bounds);
-    let mut i = pos.to_idx(bounds);
+    let mut i = *pos + dir;
 
-    i += dir_i;
-
-    if map[i] == b'.' {
+    if map[i as usize] == b'.' {
         *pos += dir;
         return;
     }
 
-    while map[i] != b'.' && map[i] != b'#' {
-        i += dir_i;
+    while map[i as usize] != b'.' && map[i as usize] != b'#' {
+        i += dir;
     }
 
-    if map[i] == b'.' {
-        map[i] = b'O';
+    if map[i as usize] == b'.' {
+        map[i as usize] = b'O';
         *pos += dir;
-        map[pos.to_idx(bounds)] = b'.';
+        map[*pos as usize] = b'.';
     }
 }
 
 fn part2_better(
-    try_push: &mut VecDeque<Point>,
-    to_push: &mut Vec<Point>,
+    try_push: &mut VecDeque<i64>,
+    to_push: &mut Vec<i64>,
     map: &mut Vec<u8>,
-    pos: &mut Point,
-    dir: &Point,
-    bounds: &Point
+    pos: &mut i64,
+    dir: i64,
 ) {
-    if dir.x != 0 {
+    if dir.abs() == 1 {
         // If moving horizontal don't have to really deal with the two wide thing.
         // So can skip some steps.
+        let mut i = *pos + dir;
         
-        let dir_i = dir.to_idx(bounds);
-        let mut i = pos.to_idx(bounds);
-
-        i += dir_i;
-        
-        while map[i] != b'.' && map[i] != b'#' {
-            i += dir_i;
+        while map[i as usize] != b'.' && map[i as usize] != b'#' {
+            i += dir;
         }
 
-        if map[i] == b'#' {
+        if map[i as usize] == b'#' {
             return;
         }
 
-        let a = pos.to_idx(bounds);
-        let b = i;
+        let a = *pos as usize;
+        let b = i as usize;
 
-        if dir.x > 0 {
+        if dir > 0 {
             map.copy_within(a..b, a + 1);
-            map[pos.to_idx(bounds)] = b'.';
+            map[a] = b'.';
         } else {
             map.copy_within(b + 1..a + 1, b);
-            map[pos.to_idx(bounds)] = b'.';
+            map[a] = b'.';
         }
 
         *pos += dir;
@@ -269,10 +253,10 @@ fn part2_better(
     
     // get the next position to try and check it.
     while let Some(pos) = try_push.pop_front() {
-        let i = pos.to_idx(bounds);
+        let i = pos;
         // println!("i: {i}");
     
-        match map[i] {
+        match map[i as usize] {
             // hit a wall.
             // Can't advance so return with no change.
             b'#' => {
@@ -292,10 +276,10 @@ fn part2_better(
                 // get the left and right components of the box.
                 let (left, right);
                 if c == b'[' {
-                    right = &pos + &DIRS[0];
+                    right = pos + 1;
                     left = pos;
                 } else {
-                    left = &pos + &DIRS[1];
+                    left = pos - 1;
                     right = pos;
                 }
 
@@ -304,8 +288,8 @@ fn part2_better(
                     continue;
                 }
     
-                try_push.push_back(&left + dir);
-                try_push.push_back(&right + dir);
+                try_push.push_back(left + dir);
+                try_push.push_back(right + dir);
 
                 to_push.push(left);
                 to_push.push(right);
@@ -319,8 +303,8 @@ fn part2_better(
     to_push.drain(..)
         .rev()
         .for_each(|p| {
-            let i = p.to_idx(bounds);
-            let ni = (&p + dir).to_idx(bounds);
+            let i = p as usize;
+            let ni = (p + dir) as usize;
             map[ni] = map[i];
             map[i] = b'.';
         });
