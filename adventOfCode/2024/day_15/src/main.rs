@@ -2,7 +2,6 @@ use std::fs;
 use std::ops::{AddAssign, Mul};
 use std::time;
 use std::ops::{Add, Sub};
-use std::collections::VecDeque;
 
 const DIRS: [Point; 4] = [
     Point{x: 1, y: 0},
@@ -132,7 +131,6 @@ fn better(input: &str) -> String {
         .flat_map(|line| line.as_bytes())
         .copied();
 
-    let mut try_push: VecDeque<i64> = VecDeque::new();
     let mut to_push: Vec<i64> = Vec::new();
 
     for m in moves {
@@ -152,7 +150,6 @@ fn better(input: &str) -> String {
 
         // advance fat map.
         part2_better(
-            &mut try_push,
             &mut to_push,
             &mut fat_map, 
             &mut fat_pos,
@@ -196,24 +193,20 @@ fn part1_better(
 ) {
     let mut i = *pos + dir;
 
-    if map[i as usize] == b'.' {
-        *pos += dir;
-        return;
-    }
-
+    // loop until found empty space or wall.
     while map[i as usize] != b'.' && map[i as usize] != b'#' {
         i += dir;
     }
 
+    // if found empty space, swap first and last places.
     if map[i as usize] == b'.' {
-        map[i as usize] = b'O';
         *pos += dir;
+        map[i as usize] = b'O';
         map[*pos as usize] = b'.';
     }
 }
 
 fn part2_better(
-    try_push: &mut VecDeque<i64>,
     to_push: &mut Vec<i64>,
     map: &mut Vec<u8>,
     pos: &mut i64,
@@ -235,6 +228,7 @@ fn part2_better(
         let a = *pos as usize;
         let b = i as usize;
 
+        // copy slice right or left, depending on dir.
         if dir > 0 {
             map.copy_within(a..b, a + 1);
             map[a] = b'.';
@@ -247,13 +241,21 @@ fn part2_better(
         return;
     }
 
-    // init with the robots position.
-    try_push.push_front(pos.add(dir));
+    // init with first position to check.
+    to_push.push(*pos);
+
+    // by keeping track of the index.
+    // We can use to_push to keep track of both the elements we need to push.
+    // And the elements we have yet to check push against.
+    let mut index = 0;
 
     
     // get the next position to try and check it.
-    while let Some(pos) = try_push.pop_front() {
+    while index < to_push.len() {
+        let pos = to_push[index] + dir;
         let i = pos;
+        index += 1;
+
         // println!("i: {i}");
     
         match map[i as usize] {
@@ -261,17 +263,12 @@ fn part2_better(
             // Can't advance so return with no change.
             b'#' => {
                 // reset lists.
-                try_push.clear();
+                // try_push.clear();
                 to_push.clear();
                 return;
             },
             // empty space, nothing further to check here.
             b'.' => continue,
-            // robots position.
-            b'@' => {
-                try_push.push_back(&pos + dir);
-                to_push.push(pos);
-            },
             c if c == b'[' || c == b']' => {
                 // get the left and right components of the box.
                 let (left, right);
@@ -288,9 +285,6 @@ fn part2_better(
                     continue;
                 }
     
-                try_push.push_back(left + dir);
-                try_push.push_back(right + dir);
-
                 to_push.push(left);
                 to_push.push(right);
             },
@@ -300,14 +294,16 @@ fn part2_better(
     
     // advance each element in reverse order.
     // from the empty space back to the robot.
-    to_push.drain(..)
+    to_push[1..]
+        .iter()
         .rev()
         .for_each(|p| {
-            let i = p as usize;
+            let i = *p as usize;
             let ni = (p + dir) as usize;
             map[ni] = map[i];
             map[i] = b'.';
         });
+    to_push.clear();
     
     *pos += dir;
 }
