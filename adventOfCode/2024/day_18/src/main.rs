@@ -127,53 +127,61 @@ fn my_attempt(input: &str) -> String {
     let mut visited = vec![usize::MAX; (bounds.x * bounds.y) as usize];
     let mut points_to_check: BinaryHeap<Reverse<RouteHead>> = BinaryHeap::new();
 
+    // parse input.
     while let Some(x) = parse_while_number(&mut input_iter) {
         let y = parse_while_number(&mut input_iter).unwrap();
         let point = Point{x: x as i64 , y: y as i64};
         points.push(point);
     }
 
+    // insert walls into grid.
     points[..limit].iter().for_each(|p| grid[p.to_idx(&bounds)] = true);
 
-
+    // find shortes path to end.
     find_path(&grid, start_pos, end_pos, bounds, &mut visited, &mut points_to_check);
-    let count = visited[end_pos.to_idx(&bounds)];
-    println!("{count}");
+    let p1 = visited[end_pos.to_idx(&bounds)];
 
 
-    grid.fill(false);
-    let mut next_byte = 0;
+    let mut left = 0;
+    let mut right = points.len() - 1;
+    let mut mid = (left + right) / 2;
 
-    loop {
+    // reset grid for p2.
+    points[..limit].iter().for_each(|p| grid[p.to_idx(&bounds)] = false);
+    points[..=mid].iter()
+        .for_each(|p| grid[p.to_idx(&bounds)] = true);
+
+    // perform binary search until left >= mid.
+    while left < mid {
+        // clear visited.
         visited.fill(usize::MAX);
-        points_to_check.clear();
+        // traverse current grid.
         find_path(&grid, start_pos, end_pos, bounds, &mut visited, &mut points_to_check);
-        // for line in visited.chunks(bounds.x as usize) {
-        //     println!("{:?}", line);
-        // }
 
-
+        // if end hasn't been visited it will still have default val of MAX.
         if visited[end_pos.to_idx(&bounds)] != usize::MAX {
-            let mut new_valids = 0;
-            points[next_byte..]
-                .iter()
-                .take_while(|p| visited[p.to_idx(&bounds)] == usize::MAX)
-                .enumerate()
-                .for_each(|(i, p)| {
-                    new_valids = i;
-                    grid[p.to_idx(&bounds)] = true;
-                });
-            grid[points[next_byte].to_idx(&bounds)] = true;
-            next_byte += new_valids + 1;
+            // path is valid. Bring left forwards to current mid.
+            left = mid;
+            mid = (left + right) / 2;
+            //
+            // add the "bytes" from new left to new mid.
+            points[left..=mid].iter()
+                .for_each(|p| grid[p.to_idx(&bounds)] = true);
+
         } else {
-            break;
+            // invalid path. Need to lower search area.
+
+            right = mid;
+            mid = (left + right) / 2;
+            // reset the invalid side.
+            points[mid + 1..=right].iter()
+                .for_each(|p| grid[p.to_idx(&bounds)] = false);
         }
     }
 
-    println!("{},{}", points[next_byte - 1].x, points[next_byte - 1].y);
+    let p2 = format!("{},{}", &points[right].x, &points[right].y);
 
-    "".to_string()
-
+    format!("Part 1: {p1}\nPart 2: {p2}")
 }
 
 
@@ -185,6 +193,7 @@ fn find_path(
     visited: &mut Vec<usize>,
     points_to_check: &mut BinaryHeap<Reverse<RouteHead>>,
 ) {
+    // init with start pos.
     points_to_check.push(Reverse(RouteHead{
         position: start_pos,
         score: 0
@@ -196,19 +205,23 @@ fn find_path(
         }
 
         let i = route_head.position.to_idx(&bounds);
+        // check for obstacle.
         if grid[i] {
             continue;
         }
 
+        // check if already visited and score when did so.
         if route_head.score >= visited[i] {
             continue;
         }
         visited[i] = route_head.score;
 
+        // check if reached the end.
         if route_head.position == end_pos {
             break;
         }
 
+        // add the cardinal directions.
         for dir in DIRS {
             points_to_check.push(
                 Reverse(RouteHead{
@@ -218,6 +231,8 @@ fn find_path(
             )
         }
     }
+
+    points_to_check.clear();
 }
 
 
