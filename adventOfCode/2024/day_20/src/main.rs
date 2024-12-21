@@ -1,32 +1,10 @@
-use std::fmt::Binary;
 use std::fs;
 use std::time;
 use std::cmp::{Ord, Ordering, Reverse};
-use std::collections::{BinaryHeap, HashSet, HashMap};
+use std::collections::{BinaryHeap, HashSet};
 use std::ops::{AddAssign, Mul};
 use std::ops::{Add, Sub};
 use std::slice::Iter;
-
-#[derive(PartialEq, Eq, Debug)]
-struct CheatHead {
-    position: Point,
-    score: usize,
-    cheat_count: usize,
-    cheat_start: Option<usize>,
-}
-
-// makes it so route head struct is sorted by the score.
-impl Ord for CheatHead {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.score.cmp(&other.score)
-    }
-}
-
-impl PartialOrd for CheatHead {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
 
 #[derive(PartialEq, Eq, Debug)]
 struct RouteHead {
@@ -123,6 +101,7 @@ fn main() {
     let input = fs::read_to_string(file_path).expect("FILE NOT FOUND");
 
     println!("my_attempt: \n{}\n", bench(&input, my_attempt));
+    println!("my_attempt 2: \n{}\n", bench(&input, my_attempt2));
 }
 
 fn bench(input: &str, f: fn(&str) -> String) -> String {
@@ -156,21 +135,88 @@ fn my_attempt(input: &str) -> String {
         &mut points_to_check,
     );
 
+
     find_cheats(
         &grid,
         bounds,
         &visited,
+    )
+}
+
+fn my_attempt2(input: &str) -> String {
+    let lines = input.trim().lines().collect::<Vec<_>>();
+
+    let bounds = Point{x: lines[0].len() as i64, y: lines.len() as i64};
+    let grid = lines
+        .iter()
+        .flat_map(|l| l.as_bytes())
+        .copied()
+        .collect::<Vec<_>>();
+
+    let start_pos = Point::from_idx(grid.iter().position(|c| *c == b'S').unwrap(), &bounds);
+
+    let mut visited = vec![usize::MAX; grid.len()];
+
+    let path = find_path2(
+        &grid,
+        start_pos,
+        bounds,
+        &mut visited,
     );
 
+    find_cheats2(
+        &path,
+        bounds,
+        &visited,
+    )
+}
 
-    "".to_string()
+fn find_cheats2(
+    path: &Vec<Point>,
+    bounds: Point,
+    visited: &Vec<usize>,
+) -> String {
+    let mut p1 = 0;
+    let mut p2 = 0;
+
+    //for a time saving of at least 100, we need to be comparing against positions at least 100
+    //further along.
+    for (i, start_pos) in path[..path.len() - 100].iter().enumerate() {
+        for end_pos in &path[i + 100..] {
+            
+            let start = start_pos.to_idx(&bounds);
+            let end = end_pos.to_idx(&bounds);
+
+            let diff = start_pos - end_pos;
+            let dist = (diff.x.abs() + diff.y.abs()) as usize;
+
+            if dist > 20 {
+                continue;
+            }
+
+            let cheat_time = visited[start] + dist;
+            if cheat_time >= visited[end] {
+                continue;
+            }
+
+            let saved_time = visited[end] - cheat_time;
+            if saved_time >= 100 {
+                if dist == 2 {
+                    p1 += 1;
+                }
+                p2 += 1;
+            }
+        }
+    }
+
+    format!("Part1: {p1}\nPart2: {p2}")
 }
 
 fn find_cheats(
     grid: &Vec<u8>,
     bounds: Point,
     visited: &Vec<usize>,
-) {
+) -> String {
     // DON'T NEED TO WALK PATH. Already have path. Just search visited for usize::MAX.
     // Can then just branch of from there.
     // Only search along walls.
@@ -246,8 +292,45 @@ fn find_cheats(
         }
     }
 
-    println!("Part 1: {p1}\nPart 2: {p2}");
+    format!("Part 1: {p1}\nPart 2: {p2}")
+}
 
+fn find_path2(
+    grid: &Vec<u8>,
+    start_pos: Point,
+    bounds: Point,
+    visited: &mut Vec<usize>,
+) -> Vec<Point> {
+    let mut path: Vec<Point> = Vec::new();
+
+    let mut step_count = 0;
+    let mut current_pos = start_pos.clone();
+    let mut dir = DIRS.iter().find(|dir| grid[(&current_pos + dir).to_idx(&bounds)] != b'#').unwrap().clone();
+
+    loop {
+        path.push(current_pos);
+        visited[current_pos.to_idx(&bounds)] = step_count;
+        step_count += 1;
+
+        let mut npos = &current_pos + &dir;
+        if grid[npos.to_idx(&bounds)] == b'#' {
+            let d = [Point{x: dir.y, y: -dir.x}, Point{x: -dir.y, y: dir.x}]
+                .into_iter()
+                .find(|dir| grid[(&current_pos + dir).to_idx(&bounds)] != b'#');
+
+            if let Some(d) = d {
+                dir = d;
+            } else {
+                break;
+            }
+
+            npos = &current_pos + &dir;
+        }
+
+        current_pos = npos;
+    }
+
+    path
 }
 
 fn find_path(
